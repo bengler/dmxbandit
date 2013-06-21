@@ -1,24 +1,5 @@
-express = require 'express'
-stylus = require 'stylus'
-assets = require 'connect-assets'
-fs = require 'fs'
-glob = require 'glob'
-path = require 'path'
+Canvas = require('canvas')
 artnet = require 'artnet-node'
-
-app = express()
-# Add Connect Assets
-app.use assets()
-# Other assets
-app.use('/img', express.static(__dirname + '/../assets/img'))
-# Sound assets
-app.use('/sound', express.static(__dirname + '/../assets/sound'))
-# Set View Engine
-app.set 'view engine', 'jade'
-# Get root_path return index view
-app.get '/', (req, resp) ->
-  resp.render 'app'
-
 
 class Sinusoidal
   constructor: ->
@@ -30,7 +11,7 @@ class Sinusoidal
     cx = Math.sin(@t/90.2)*5.1
     cy = Math.cos(@t/21.8)*8.5
     g = @sampleSin(cx, cy, 3.1, x, y)
-    cx = Math.sin(@t/(Math.sin(@t/20)*20))*5.9
+    cx = Math.sin(@t/50)*5.9
     cy = Math.cos(@t/22.1)*9.1
     b = @sampleSin(cx, cy, 5, x, y)
     [r, g, b]
@@ -42,6 +23,68 @@ class Sinusoidal
   advance: ->
     @t += 0.4
 
+class CanvasSampler
+  constructor: ->
+    if window?
+      @canvas = $("<canvas width='256' height='256'/>")[0]
+    else
+      @canvas = new Canvas(64,64)
+    @ctx = @canvas.getContext('2d')
+  sample: (x, y) ->
+    index = (x+y*@imageData.width)*4
+    [@imageData.data[index], @imageData.data[index+1], @imageData.data[index+2]]
+  advance: ->
+    @imageData = @ctx.getImageData(0,0,64,64)
+
+
+class Scroller extends CanvasSampler
+  constructor: ->
+    super()
+    @text = "WOWOWOWO OIOIOIOIOIO O-O_O^O"
+    @x = 0
+    @ctx.font = '10px sans-serif'
+    @ctx.webkitImageSmoothingEnabled = false;
+  advance: ->
+    @x = 0 if @x < -200
+    @x -= 0.2
+    @ctx.fillStyle = '#000'
+    @ctx.fillRect(0,0,64,64)
+    @ctx.fillStyle = '#fff'
+    @ctx.fillText(@text, @x, 8)
+    super()
+
+class Mixer
+  constructor: (@generators) ->
+  sample: (x, y) ->
+    o_r = 0
+    o_g = 0
+    o_b = 0
+    for g in @generators
+      [r, g, b] = g.sample(x,y)
+      o_r += r
+      o_g += g
+      o_b += b
+    if o_r > 255
+      o_r = 255
+    if o_g > 255
+      o_g = 255
+    if o_b > 255
+      o_b = 255
+    [o_r, o_g, o_b]
+  advance: ->
+    for g in @generators
+      g.advance()
+
+class Dimmer
+  constructor: (@generator) ->
+    @level = 0.5
+  sample: (x, y) ->
+    [r,g,b] = @generator.sample(x,y)
+    [Math.floor(r*@level), Math.floor(g*@level), Math.floor(b*@level)]
+  advance: ->
+    @generator.advance()
+
+
 generateDMX = (generator, width, height, start_channel) ->
   packet = []
   for i in [0...start_channel]
@@ -51,35 +94,18 @@ generateDMX = (generator, width, height, start_channel) ->
       packet = packet.concat(generator.sample(x,y))
   packet
 
-generator = new Sinusoidal()
+scroller = new Scroller()
+sinus = new Sinusoidal()
+mixer = new Mixer([scroller, sinus])
+generator = new Dimmer(mixer)
+generator.level = 0.2
 
 client = artnet.Client.createClient('10.0.0.8', 6454);
 
+scroller.advance()
+
 send = ->
-  client.send(generateDMX(generator, 1, 12, 109))
   generator.advance()
+  client.send(generateDMX(generator, 12, 12, 1))
 
 setInterval(send, 20)
-
-
-#app.get '/blast', (req, resp) ->
-
-
-# resp.send "Done"
-# process.exit()
-
-# Get root_path return index view
-app.get '/editor', (req, resp) ->
-  resp.render 'editor'
-app.get '/public/levels', (req, resp) ->
-  resp.set('Content-Type', 'application/json');
-  meta = JSON.parse(fs.readFileSync("./levels/meta.json"))
-  glob "./levels/*.txt", {}, (err, files) ->
-    levels = {}
-    for file in files
-      levels[path.basename(file)] = fs.readFileSync(file, 'utf-8')
-    resp.send(200, JSON.stringify({meta, levels}))
-# Define Port
-port = process.env.PORT or process.env.VMC_APP_PORT or 3000
-# Start Server
-app.listen port, -> console.log "Listening on #{port}\nPress CTRL-C to stop server."

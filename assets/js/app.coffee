@@ -1,8 +1,5 @@
 
 
-t=0
-
-
 class BlankGenerator
   light: (x,y) ->
     "#fff"
