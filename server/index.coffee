@@ -90,20 +90,71 @@ class Mario extends CanvasSampler
     @sheet = readImage('../assets/img/supermario_anim.png')
     @frame = 0
     @t = 0
+    @animations =
+      walking: [0, 5, 3]
+      flying: [9, 10, 11, 12, 13]
+      thump: [7, 8, -1]
+      standing: [1]
+    @setAnimation('walking')
+  setAnimation: (animation) ->
+    @frame = 0
+    @animation = animation
+  switch: ->
+    console.log 'switching'
+    switch @animation
+      when 'walking'
+        @setAnimation('flying')
+      when 'flying'
+        @setAnimation('thump')
+      when 'thump'
+        @setAnimation('standing')
+      when 'standing'
+        @setAnimation('walking')
   nextFrame: ->
-    @frame += 1
-    if @frame > 13
-      @frame = 0
+    if Math.random() < 0.1
+      @switch()
+    else
+      if @animations[@animation][@frame+1] != -1
+        @frame += 1
+        if @frame >= @animations[@animation].length
+          @frame = 0
+      else
+        @switch()
+    console.log @animation, @animations[@animation][@frame]
   advance: ->
-    @ctx.drawImage(@sheet, -@frame * 12, 0, @sheet.width, @sheet.height)
+    @ctx.drawImage(@sheet, -@animations[@animation][@frame] * 12, 0, @sheet.width, @sheet.height)
     @t += 1
     if @t % 20 == 0
       @nextFrame()
     super()
 
-# class Raaah extends CanvasSampler
-#   cons
 
+class Raaah extends CanvasSampler
+  constructor: ->
+    super()
+    @t = 0
+    @lines = []
+    for i in [0..20]
+      @addLine
+  addLine: ->
+    @lines.push
+      x: 12+Math.random()*12
+      y: Math.random()*12
+      dx: -Math.pow(Math.random(),4)
+      l: Math.random()*10
+  advance: ->
+    for l in @lines
+      l.x += l.dx
+      @ctx.strokeStyle = "rgba(255, 255, 255, 0.5)"
+      @ctx.beginPath()
+      @ctx.moveTo(l.x, l.y)
+      @ctx.lineTo(l.x+l.l, l.y)
+      @ctx.stroke()
+    if Math.random() < 0.01
+      @lines.unshift()
+    if Math.random() < 0.4
+      @addLine()
+    super()
 
 class ImageExplorer extends CanvasSampler
   constructor: (@image) ->
@@ -155,6 +206,38 @@ class Mixer
     for g in @generators
       g.advance()
 
+
+class Sequencer
+  constructor: (@generators) ->
+    @current = Math.floor(Math.random()*@generators.length)
+    @next = Math.floor(Math.random()*@generators.length)
+    @t = 0
+    @elapsed = 0
+    @transitionAfter = Math.random()*1000
+  sample: (x, y) ->
+    [r1, g1, b1] = @generators[@current].sample(x,y)
+    [r2, g2, b2] = @generators[@next].sample(x,y)
+    [
+      Math.floor((r1*(1-@t)+r2*(@t))/2),
+      Math.floor((g1*(1-@t)+g2*(@t))/2),
+      Math.floor((b1*(1-@t)+b2*(@t))/2)
+    ]
+  advance: ->
+    console.log @current, @next, @elapsed, @transitionAfter
+    @elapsed += 1
+    if @elapsed > @transitionAfter
+      console.log "transitioning #{@t}", @current, @next
+      @t += 0.005
+      if @t >= 1.0
+        @current = @next
+        @t = 0
+        @transitionAfter = Math.random()*400
+        @elapsed = 0
+        while @next == @current
+          @next = Math.floor(Math.random()*@generators.length)
+    @generators[@current].advance()
+    @generators[@next].advance()
+
 class Dimmer
   constructor: (@generator) ->
     @level = 0.1
@@ -185,7 +268,8 @@ imagexporer = new ImageExplorer(zelda_sheet)
 linescape = new LineScape()
 mario = new Mario()
 epill = new Epillepsy()
-generator = new Dimmer(new Mixer([mario]))
+raaah = new Raaah()
+generator = new Dimmer(new Sequencer([linescape, mario, raaah, sinus]))
 generator.level = 0.1
 
 client = artnet.Client.createClient('192.168.0.240', 6454);
