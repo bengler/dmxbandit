@@ -184,6 +184,57 @@ class Scroller extends CanvasSampler
     @ctx.fillText(@text, @x, 8)
     super()
 
+
+class Ball
+  constructor: (posX, posY) ->
+    @x = posX
+    @y = posY
+    @size = Math.floor(Math.random() * 4)
+    @t = Math.floor(Math.random() * 20) + 30
+
+  advance: ->
+    @t += 1
+
+  remove: ->
+    if @t > 20
+      return true
+    else
+      return false
+
+class JustBalls extends CanvasSampler
+  constructor: ->
+    super()
+    @ctx.webkitImageSmoothingEnabled = true;
+    @ctx.antialias = 'grey'
+    @t = 0
+    @width = 12
+    @balls = []
+
+  advance: ->
+
+    @ctx.fillStyle = '#000'
+    @ctx.fillRect(0,0,64,64)
+
+    if Math.random() < 0.3
+      @balls.push (new Ball(Math.random() * @width, Math.random() * @width))
+      console.info @balls
+      console.info "SNARK"
+
+    @ctx.fillStyle = '#fff'
+
+    for ball in @balls
+      ball.advance()
+      console.info ball.x
+      @ctx.fillRect(ball.x, ball.y, ball.x + ball.size, ball.y + ball.size)
+
+    @newBalls = []
+    for ball in @balls
+      @newBalls < ball if !ball.remove()
+    @balls = @newBalls
+
+    super()
+
+
 class Mixer
   constructor: (@generators) ->
   sample: (x, y) ->
