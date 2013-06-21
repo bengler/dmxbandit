@@ -10,6 +10,7 @@
     , "nib": "0.4.1"
     , "markdown": "0.3.1"
     , "coffee-script": "*"
+    , "artnet-node": "*"
     , "glob": "*"
   }, "scripts": {
     "start": "node start.js",
