@@ -316,7 +316,8 @@ linescape = new LineScape()
 mario = new Mario()
 epill = new Epillepsy()
 raaah = new Raaah()
-generator = new Sequencer([linescape, mario, raaah, sinus])
+balls = new JustBalls()
+generator = new Sequencer([balls, linescape, mario, raaah, sinus])
 
 dimmed = new Dimmer(generator)
 dimmed.level = 0.3
