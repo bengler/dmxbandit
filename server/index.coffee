@@ -30,7 +30,7 @@ class Sinusoidal
     [r, g, b]
   sampleSin: (cx, cy, freq, sx, sy) ->
     d = Math.sqrt(Math.pow(sx-cx, 2)+Math.pow(sy-cy,2))
-    r = Math.floor((Math.sin(d/(Math.PI*2)*freq)+1)*128)*0.2
+    r = Math.floor((Math.sin(d/(Math.PI*2)*freq)+1)*128)
     return 255 if r > 255
     r
   advance: ->
@@ -100,7 +100,6 @@ class Mario extends CanvasSampler
     @frame = 0
     @animation = animation
   switch: ->
-    console.log 'switching'
     switch @animation
       when 'walking'
         @setAnimation('flying')
@@ -120,7 +119,6 @@ class Mario extends CanvasSampler
           @frame = 0
       else
         @switch()
-    console.log @animation, @animations[@animation][@frame]
   advance: ->
     @ctx.drawImage(@sheet, -@animations[@animation][@frame] * 12, 0, @sheet.width, @sheet.height)
     @t += 1
@@ -134,13 +132,13 @@ class Raaah extends CanvasSampler
     super()
     @t = 0
     @lines = []
-    for i in [0..20]
+    for i in [0..200]
       @addLine
   addLine: ->
     @lines.push
       x: 12+Math.random()*12
       y: Math.random()*12
-      dx: -Math.pow(Math.random(),4)
+      dx: -Math.pow(Math.random(),4)*2-1
       l: Math.random()*10
   advance: ->
     for l in @lines
@@ -152,7 +150,7 @@ class Raaah extends CanvasSampler
       @ctx.stroke()
     if Math.random() < 0.01
       @lines.unshift()
-    if Math.random() < 0.4
+    if Math.random() < 0.02
       @addLine()
     super()
 
@@ -274,15 +272,13 @@ class Sequencer
       Math.floor((b1*(1-@t)+b2*(@t))/2)
     ]
   advance: ->
-    console.log @current, @next, @elapsed, @transitionAfter
     @elapsed += 1
     if @elapsed > @transitionAfter
-      console.log "transitioning #{@t}", @current, @next
-      @t += 0.005
+      @t += 0.001
       if @t >= 1.0
         @current = @next
         @t = 0
-        @transitionAfter = Math.random()*400
+        @transitionAfter = Math.random()*2000
         @elapsed = 0
         while @next == @current
           @next = Math.floor(Math.random()*@generators.length)
@@ -291,7 +287,7 @@ class Sequencer
 
 class Dimmer
   constructor: (@generator) ->
-    @level = 0.1
+    @level = 0.2
   sample: (x, y) ->
     [r,g,b] = @generator.sample(x,y)
     [Math.floor(r*@level), Math.floor(g*@level), Math.floor(b*@level)]
@@ -320,18 +316,27 @@ linescape = new LineScape()
 mario = new Mario()
 epill = new Epillepsy()
 raaah = new Raaah()
-generator = new Dimmer(new Sequencer([linescape, mario, raaah, sinus]))
-generator.level = 0.1
+generator = new Sequencer([linescape, mario, raaah, sinus])
+
+dimmed = new Dimmer(generator)
+dimmed.level = 0.3
 
 client = artnet.Client.createClient('192.168.0.240', 6454);
 
 scroller.advance()
+ansi = require('ansi')
+cursor = ansi(process.stdout)
 
-
+generateANSI = (generator) ->
+  for y in [0...12]
+    for x in [0...12]
+      [r,g,b] = generator.sample(x,y)
+      cursor.reset().goto(x*2+30,y+10).bg.rgb(r,g,b).write("  ")
 
 send = ->
   generator.advance()
-  client.send(generateDMX(generator, 12, 12, 0))
+  client.send(generateDMX(dimmed, 12, 12, 0))
+  generateANSI(generator)
 
 timer = setInterval(send, 20)
 
